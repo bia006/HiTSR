@@ -1,0 +1,123 @@
+name: stage3_restoration_gan
+use_tb_logger: false
+model_type: SwinTransformerModel
+map_type: online_CUFED_swap
+suffix_lq: 'lq'  # add suffix to saved images
+suffix_rec: 'rec'
+suffix_gt: 'gt'
+suffix_ref: 'ref'
+scale: 4
+crop_border: ~
+set_CUDA_VISIBLE_DEVICES: ~
+gpu_ids: [1]
+
+opt: $opt
+# datasets
+datasets:
+  train:
+    name: CUFED
+    type: RefCUFEDDataset
+    dataroot_in: ./datasets/CUFED/train_CUFED/input
+    dataroot_ref: ./datasets/CUFED/train_CUFED/ref
+    io_backend:
+      type: disk
+
+    gt_size: 160
+    use_flip: true
+    use_rot: true
+
+    bicubic_model: PIL
+
+    use_shuffle: true
+    n_workers: 12  # per GPU
+    batch_size: 10
+    dataset_enlarge_ratio: 1000
+
+  val:
+    name: CUFED5_val
+    type: RefCUFEDDataset
+    dataroot_in: ./datasets/CUFED5_val/input
+    dataroot_ref: ./datasets/CUFED5_val/ref
+    io_backend:
+      type: disk
+
+    bicubic_model: PIL
+
+    ann_file: ./datasets/CUFED5_cropped_val_pairs.txt
+
+    bicubic_model: PIL
+
+# network structures
+network_g:
+  type: SwinTransformer
+  img_size: 40
+  embed_dim: 64
+  num_heads: [4, 4, 8, 8]
+  depths: [2, 2]
+
+
+network_d:
+  type: Discriminator
+
+# path
+path:
+  pretrain_model_g: ~
+  pretrain_model_d: ~
+
+  strict_load: true
+  resume_state: ~
+
+# training settings: learning rate scheme, loss
+train:
+  lr_g: !!float 2e-4
+  lr_offset: !!float 1e-4
+  lr_relu2_offset: !!float 1e-5
+  lr_relu3_offset: !!float 1e-6
+  weight_decay_g: 0
+  beta_g: [0.9, 0.999]
+  lr_d: !!float 2e-4
+  weight_decay_d: 0
+  beta_d: [0.9, 0.999]
+  lr_scheme: MultiStepLR
+
+  niter: 600000
+  warmup_iter: -1  # no warm up
+  net_g_pretrain_steps: 10000
+  lr_steps: [112545, 451040]
+  accumulation_step: 1
+  lr_gamma: 0.1
+
+  pixel_criterion: L1Loss
+  loss_weight: !!float 1.0
+  perceptual_opt:
+    layer_weights:
+      'relu5_1': 1
+    vgg_type: vgg19
+    use_input_norm: true
+    perceptual_weight: !!float 1e-4
+    style_weight: 0
+    norm_img: false
+    criterion: fro
+
+  gan_type: wgan
+  gan_weight: !!float 1e-6
+  grad_penalty_weight: !!float 10.0
+
+  net_d_steps: 1
+  net_d_init_steps: 0
+
+  manual_seed: 10
+
+val:
+  val_freq: !!float 10e3
+  save_img: True
+
+# logger
+logger:
+  print_freq: 100
+  save_checkpoint_freq: !!float 5e3
+
+dist_params:
+  backend: nccl
+  port: 29746
+
